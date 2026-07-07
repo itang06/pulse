@@ -1,0 +1,33 @@
+# --- local-only documentation ---
+CLAUDE.md
+docs/
+
+# --- secrets / environment ---
+.env
+.env.*
+!.env.example
+
+# --- Rust ---
+target/
+
+# --- Go ---
+gateway/bin/
+
+# --- editor / OS ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- local runtime data ---
+deploy/.data/
+
+# Generated ingress verification output.
+artifacts/runs/ingress/*/
+
+# Generated processor verification and replay output.
+artifacts/runs/processor/*
+!artifacts/runs/processor/.gitkeep
+
+# Generated sink crash-recovery output.
+artifacts/runs/sink/*
+!artifacts/runs/sink/.gitkeep
