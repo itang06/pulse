@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  proto:
+    name: Proto (lint + codegen drift)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - run: buf lint
+      # Committed generated Go code must match the schemas.
+      - run: buf generate && git diff --exit-code -- gateway/gen
+
+  gateway:
+    name: Gateway (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: gateway/go.mod
+          cache-dependency-path: gateway/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  rust:
+    name: Workspace (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # cmake is preinstalled on ubuntu runners; the vendored librdkafka also
+      # needs libcurl headers.
+      - run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+      - run: cargo build --workspace
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo test --workspace
