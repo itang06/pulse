@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package pulse.v1;
+
+message TelemetryEvent {
+  string event_id = 1;
+}
+
+message ExportRequest {
+  repeated TelemetryEvent events = 1;
+}
+
+message ExportResponse {
+  uint64 accepted = 1;
+}
+
+service TelemetryService {
+  rpc Export(stream ExportRequest) returns (ExportResponse);
+}
