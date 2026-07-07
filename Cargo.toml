@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "pulse-proto",
+    "sdk",
+    "processor",
+    "sink",
+    "demo",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/itang06/pulse"
+
+# Shared lint config (crates opt in via `[lints] workspace = true`). Add
+# lints here deliberately: CI runs clippy with -D warnings, so anything
+# listed becomes a hard CI failure, including inside #[cfg(test)] code.
+[workspace.lints.clippy]

@@ -1,0 +1,20 @@
+[package]
+name = "pulse-proto"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+prost = "0.14.4"
+prost-types = "0.14.4"
+tonic = "0.14.6"
+tonic-prost = "0.14.6"
+
+[lints]
+workspace = true
+
+[build-dependencies]
+protoc-bin-vendored = "3.2.0"
+tonic-build = "0.14.6"
+tonic-prost-build = "0.14.6"
