@@ -19,20 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TelemetryService_Export_FullMethodName = "/pulse.v1.TelemetryService/Export"
+	TelemetryService_ExportBatch_FullMethodName = "/pulse.v1.TelemetryService/ExportBatch"
 )
 
 // TelemetryServiceClient is the client API for TelemetryService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TelemetryServiceClient interface {
-	// SDK -> gateway export stream.
-	//
-	// TODO(you): the RPC shape is also a design decision. Client-streaming (as
-	// stubbed here) means one ack when the stream closes; bidirectional
-	// streaming would allow per-batch acks and is where a backpressure signal
-	// to the SDK could live. Pick deliberately and document the trade-off.
-	Export(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ExportRequest, ExportResponse], error)
+	ExportBatch(ctx context.Context, in *ExportBatchRequest, opts ...grpc.CallOption) (*ExportBatchResponse, error)
 }
 
 type telemetryServiceClient struct {
@@ -43,30 +37,21 @@ func NewTelemetryServiceClient(cc grpc.ClientConnInterface) TelemetryServiceClie
 	return &telemetryServiceClient{cc}
 }
 
-func (c *telemetryServiceClient) Export(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ExportRequest, ExportResponse], error) {
+func (c *telemetryServiceClient) ExportBatch(ctx context.Context, in *ExportBatchRequest, opts ...grpc.CallOption) (*ExportBatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TelemetryService_ServiceDesc.Streams[0], TelemetryService_Export_FullMethodName, cOpts...)
+	out := new(ExportBatchResponse)
+	err := c.cc.Invoke(ctx, TelemetryService_ExportBatch_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[ExportRequest, ExportResponse]{ClientStream: stream}
-	return x, nil
+	return out, nil
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TelemetryService_ExportClient = grpc.ClientStreamingClient[ExportRequest, ExportResponse]
 
 // TelemetryServiceServer is the server API for TelemetryService service.
 // All implementations must embed UnimplementedTelemetryServiceServer
 // for forward compatibility.
 type TelemetryServiceServer interface {
-	// SDK -> gateway export stream.
-	//
-	// TODO(you): the RPC shape is also a design decision. Client-streaming (as
-	// stubbed here) means one ack when the stream closes; bidirectional
-	// streaming would allow per-batch acks and is where a backpressure signal
-	// to the SDK could live. Pick deliberately and document the trade-off.
-	Export(grpc.ClientStreamingServer[ExportRequest, ExportResponse]) error
+	ExportBatch(context.Context, *ExportBatchRequest) (*ExportBatchResponse, error)
 	mustEmbedUnimplementedTelemetryServiceServer()
 }
 
@@ -77,8 +62,8 @@ type TelemetryServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedTelemetryServiceServer struct{}
 
-func (UnimplementedTelemetryServiceServer) Export(grpc.ClientStreamingServer[ExportRequest, ExportResponse]) error {
-	return status.Error(codes.Unimplemented, "method Export not implemented")
+func (UnimplementedTelemetryServiceServer) ExportBatch(context.Context, *ExportBatchRequest) (*ExportBatchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExportBatch not implemented")
 }
 func (UnimplementedTelemetryServiceServer) mustEmbedUnimplementedTelemetryServiceServer() {}
 func (UnimplementedTelemetryServiceServer) testEmbeddedByValue()                          {}
@@ -101,12 +86,23 @@ func RegisterTelemetryServiceServer(s grpc.ServiceRegistrar, srv TelemetryServic
 	s.RegisterService(&TelemetryService_ServiceDesc, srv)
 }
 
-func _TelemetryService_Export_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TelemetryServiceServer).Export(&grpc.GenericServerStream[ExportRequest, ExportResponse]{ServerStream: stream})
+func _TelemetryService_ExportBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelemetryServiceServer).ExportBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelemetryService_ExportBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelemetryServiceServer).ExportBatch(ctx, req.(*ExportBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TelemetryService_ExportServer = grpc.ClientStreamingServer[ExportRequest, ExportResponse]
 
 // TelemetryService_ServiceDesc is the grpc.ServiceDesc for TelemetryService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -114,13 +110,12 @@ type TelemetryService_ExportServer = grpc.ClientStreamingServer[ExportRequest, E
 var TelemetryService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "pulse.v1.TelemetryService",
 	HandlerType: (*TelemetryServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "Export",
-			Handler:       _TelemetryService_Export_Handler,
-			ClientStreams: true,
+			MethodName: "ExportBatch",
+			Handler:    _TelemetryService_ExportBatch_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "pulse/v1/telemetry.proto",
 }

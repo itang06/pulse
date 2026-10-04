@@ -2,18 +2,61 @@ syntax = "proto3";
 
 package pulse.v1;
 
+import "google/protobuf/timestamp.proto";
+
+// One request telemetry measurement captured by the SDK.
 message TelemetryEvent {
+  // Stable client-generated UUID used as the pipeline idempotency key.
   string event_id = 1;
+  google.protobuf.Timestamp event_time = 2;
+  string service_name = 3;
+  string route = 4;
+  uint64 latency_us = 5;
+  uint32 status_code = 6;
+  string trace_id = 7;
+  map<string, string> attributes = 8;
 }
 
-message ExportRequest {
-  repeated TelemetryEvent events = 1;
+// One acknowledged, all-or-nothing SDK export attempt.
+message ExportBatchRequest {
+  string batch_id = 1;
+  repeated TelemetryEvent events = 2;
 }
 
-message ExportResponse {
-  uint64 accepted = 1;
+message ExportBatchResponse {
+  string batch_id = 1;
+  uint64 accepted_count = 2;
+}
+
+// Processor output containing the original event and its anomaly verdict.
+message EnrichedTelemetry {
+  TelemetryEvent event = 1;
+  double ewma_mean_us = 2;
+  double ewma_stddev_us = 3;
+  double anomaly_score = 4;
+  bool is_anomaly = 5;
+  google.protobuf.Timestamp processed_at = 6;
+}
+
+enum FailureStage {
+  FAILURE_STAGE_UNSPECIFIED = 0;
+  FAILURE_STAGE_PROCESSOR = 1;
+  FAILURE_STAGE_SINK = 2;
+}
+
+// Shared envelope for permanently malformed processor or sink records.
+message DeadLetterRecord {
+  bytes original_payload = 1;
+  FailureStage stage = 2;
+  string source_topic = 3;
+  int32 source_partition = 4;
+  int64 source_offset = 5;
+  string error_category = 6;
+  string reason = 7;
+  google.protobuf.Timestamp failed_at = 8;
+  string event_id = 9;
 }
 
 service TelemetryService {
-  rpc Export(stream ExportRequest) returns (ExportResponse);
+  rpc ExportBatch(ExportBatchRequest) returns (ExportBatchResponse);
 }
