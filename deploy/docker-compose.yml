@@ -1,3 +1,11 @@
+# Pulse local dev stack: Kafka (KRaft, single node), TimescaleDB, Prometheus,
+# Grafana. The Pulse services (gateway/processor/sink/demo) run on the host
+# during development.
+#
+# All published ports bind to 127.0.0.1 for local development.
+#
+# Credentials come from deploy/.env (never committed); see .env.example.
+
 name: pulse
 
 services:
@@ -6,10 +14,14 @@ services:
     ports:
       - "127.0.0.1:9092:9092"
     environment:
+      # Single-node KRaft: this node is both broker and controller, with no
+      # ZooKeeper. Replication factors are 1 because there is one broker.
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Two data listeners: HOST (advertised as 127.0.0.1:9092) for services
+      # running on the host during dev, INTERNAL (kafka:29092) for containers.
       KAFKA_LISTENERS: INTERNAL://:29092,CONTROLLER://:9093,HOST://:9092
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,HOST://127.0.0.1:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,HOST:PLAINTEXT
@@ -17,6 +29,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Topics are created explicitly by kafka-init with deliberate partition
+      # counts. The broker default retention is 7 days. Raw and processed
+      # topics each store a copy of every event.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     volumes:
       - kafka_data:/var/lib/kafka/data
@@ -27,6 +42,7 @@ services:
       retries: 12
       start_period: 20s
 
+  # One-shot topic creation. Runs to completion and exits 0.
   kafka-init:
     image: apache/kafka:3.9.1
     depends_on:
@@ -43,9 +59,15 @@ services:
         create --topic telemetry.raw       --partitions 3
         create --topic telemetry.enriched --partitions 3
         create --topic telemetry.dlq       --partitions 1
+        echo "topics ready:"
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
     restart: "no"
 
   timescaledb:
+    # Pinned (the stateful service must not float): a re-pull that ships a
+    # newer extension .so against the persisted volume fails at startup with
+    # version-mismatch errors. Note: this image does NOT ship the
+    # timescaledb_toolkit extension (relevant to percentile aggregates).
     image: timescale/timescaledb:2.28.2-pg17
     ports:
       - "127.0.0.1:5432:5432"
@@ -62,6 +84,54 @@ services:
       retries: 12
       start_period: 10s
 
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    # Lets Prometheus-in-Docker scrape services running on the host during
+    # dev (host.docker.internal targets in prometheus.yml). Caveat: on macOS
+    # Docker Desktop's proxy reaches host services even when they bind
+    # 127.0.0.1; on Linux, host-gateway traffic arrives via the bridge, so
+    # 127.0.0.1-bound services (processor/sink defaults) are not reachable.
+    # Bind them to 0.0.0.0 when scraping from Docker on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in deploy/.env}
+      # Anonymous users can view dashboards but cannot edit them.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
 volumes:
   kafka_data:
   timescale_data:
+  prometheus_data:
+  grafana_data:

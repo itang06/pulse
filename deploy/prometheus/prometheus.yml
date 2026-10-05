@@ -1,0 +1,26 @@
+# Prometheus scrape config for the Pulse pipeline.
+#
+# Dev topology: Prometheus runs in Docker, the Pulse services run on the host,
+# so targets use host.docker.internal. When the services are containerized for
+# deployment, switch targets to compose service names (gateway:9464, ...).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: pulse-gateway
+    static_configs:
+      - targets: ["host.docker.internal:9464"]
+
+  - job_name: pulse-processor
+    static_configs:
+      - targets: ["host.docker.internal:9465"]
+
+  - job_name: pulse-sink
+    static_configs:
+      - targets: ["host.docker.internal:9466"]
