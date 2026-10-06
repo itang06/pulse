@@ -5,6 +5,9 @@
 //! the message types to decode Kafka payloads.
 
 pub mod pulse {
+    // tonic expands async service methods into futures that already carry
+    // must-use semantics, which triggers double_must_use in generated code.
+    #[allow(clippy::double_must_use)]
     pub mod v1 {
         tonic::include_proto!("pulse.v1");
     }
